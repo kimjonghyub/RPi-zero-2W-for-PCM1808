@@ -33,6 +33,13 @@ static const struct snd_soc_dapm_route pcm1808_dapm_routes[] = {
 
 static struct snd_soc_dai_driver pcm1808_dai = {
     .name = "pcm1808-hifi",
+    .playback = {
+        .stream_name = "Playback",
+        .channels_min = 2,
+        .channels_max = 2,
+        .rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_64000 | SNDRV_PCM_RATE_96000,
+        .formats = SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE,
+    },
     .capture = {
         .stream_name = "Capture",
         .channels_min = 2,
