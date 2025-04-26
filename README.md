@@ -1,1 +1,170 @@
-# RPi-zero-2W-for-PCM1808
+# PCM1808 Setup Guide (Raspberry Pi Zero 2W)
+
+## 1. PCM1808 Kernel Driver (pcm1808.c)
+
+```c
+#include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+#include <sound/soc.h>
+
+static const struct snd_soc_dapm_widget pcm1808_dapm_widgets[] = {
+    SND_SOC_DAPM_INPUT("VINL"),
+    SND_SOC_DAPM_INPUT("VINR"),
+    SND_SOC_DAPM_ADC("ADC", NULL, SND_SOC_NOPM, 0, 0)
+};
+
+static const struct snd_soc_dapm_route pcm1808_dapm_routes[] = {
+    { "Capture", NULL, "ADC" },
+    { "ADC", NULL, "VINL" },
+    { "ADC", NULL, "VINR" },
+};
+
+static struct snd_soc_dai_driver pcm1808_dai = {
+    .name = "pcm1808-hifi",
+    .capture = {
+        .stream_name = "Capture",
+        .channels_min = 2,
+        .channels_max = 2,
+        .rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_64000 | SNDRV_PCM_RATE_96000,
+        .formats = SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE,
+    },
+};
+
+static struct snd_soc_component_driver soc_component_dev_pcm1808 = {
+    .dapm_widgets = pcm1808_dapm_widgets,
+    .num_dapm_widgets = ARRAY_SIZE(pcm1808_dapm_widgets),
+    .dapm_routes = pcm1808_dapm_routes,
+    .num_dapm_routes = ARRAY_SIZE(pcm1808_dapm_routes),
+};
+
+static int pcm1808_probe(struct platform_device *pdev)
+{
+    return devm_snd_soc_register_component(&pdev->dev,
+                                           &soc_component_dev_pcm1808,
+                                           &pcm1808_dai, 1);
+}
+
+static const struct of_device_id pcm1808_of_match[] = {
+    { .compatible = "ti,pcm1808", },
+    {},
+};
+MODULE_DEVICE_TABLE(of, pcm1808_of_match);
+
+static struct platform_driver pcm1808_driver = {
+    .driver = {
+        .name = "pcm1808-codec",
+        .of_match_table = pcm1808_of_match,
+    },
+    .probe = pcm1808_probe,
+};
+
+module_platform_driver(pcm1808_driver);
+
+MODULE_DESCRIPTION("ASoC PCM1808 ADC driver");
+MODULE_AUTHOR("Florian Larysch <fl@n621.de>");
+MODULE_LICENSE("GPL");
+```
+
+## 2. Build the PCM1808 Kernel Module
+
+```bash
+# Navigate to the directory containing pcm1808.c
+make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
+
+# Load the module manually
+sudo insmod pcm1808.ko
+
+# Check module is loaded
+lsmod | grep pcm1808
+```
+
+## 3. Device Tree Overlay (pcm1808_slave.dts)
+
+```dts
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target = <&i2s>;
+        __overlay__ {
+            status = "okay";
+            #sound-dai-cells = <0>;
+        };
+    };
+
+    fragment@1 {
+        target-path = "/";
+        __overlay__ {
+            pcm1808_audio: pcm1808_audio {
+                compatible = "simple-audio-card";
+                simple-audio-card,name = "PCM1808 I2S Input";
+                simple-audio-card,format = "i2s";
+
+                simple-audio-card,bitclock-master = <&codec_dai>;
+                simple-audio-card,frame-master    = <&codec_dai>;
+
+                simple-audio-card,cpu {
+                    sound-dai = <&i2s>;
+                    dai-tdm-slot-num = <2>;
+                    dai-tdm-slot-width = <32>;
+                };
+
+                codec_dai: simple-audio-card,codec {
+                    sound-dai = <&pcm1808_codec>;
+                };
+            };
+
+            pcm1808_codec: pcm1808_codec {
+                compatible = "ti,pcm1808";
+                #sound-dai-cells = <0>;
+            };
+        };
+    };
+};
+```
+
+## 4. Build and Install the Overlay
+
+```bash
+# Compile the DTS
+dtc -@ -I dts -O dtb -o pcm1808_slave.dtbo pcm1808_slave.dts
+
+# Copy to overlays directory
+sudo cp pcm1808_slave.dtbo /boot/overlays/
+
+# Edit /boot/config.txt and add:
+dtoverlay=pcm1808_slave
+
+# Reboot
+sudo reboot
+```
+
+## 5. Confirm Operation
+
+```bash
+# Check if recognized
+aplay -l
+arecord -l
+
+# Check kernel logs
+sudo dmesg | grep i2s
+sudo dmesg | grep pcm1808
+```
+
+---
+
+**Important Notes:**
+- PCM1808 is configured as I2S Master.
+- Raspberry Pi I2S is configured as Slave.
+- Bitclock (BCLK) and Word Clock (LRCK) must be supplied from PCM1808.
+- Data format must be 32bit width in DTS.
+- Recording format must match: `arecord -D hw:0,0 -f S32_LE -r 48000 -c 2`
+
+---
+
+Ready for professional PCM1808 audio processing with Raspberry Pi! 🚀
+
