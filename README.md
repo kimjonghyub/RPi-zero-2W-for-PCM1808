@@ -83,6 +83,9 @@ MODULE_LICENSE("GPL");
 # Navigate to the directory containing pcm1808.c
 make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
 
+sudo cp pcm1808.ko /lib/modules/$(uname -r)/kernel/sound/soc/codecs/
+sudo depmod -a
+
 # Load the module manually
 sudo insmod pcm1808.ko
 
