@@ -85,9 +85,10 @@ MODULE_LICENSE("GPL");
 ```
 
 ## 2. Build the PCM1808 Kernel Module
-sudo apt install raspberrypi-kernel-headers build-essential
+
 ```bash
 # Navigate to the directory containing pcm1808.c
+sudo apt install raspberrypi-kernel-headers build-essential
 make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
 
 sudo cp pcm1808.ko /lib/modules/$(uname -r)/kernel/sound/soc/codecs/
